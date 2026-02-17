@@ -1906,33 +1906,91 @@ body {
   width: 100%;
   max-width: 430px;
   max-height: 85dvh;
+  max-height: 85vh;
   background: var(--bg-secondary);
   border-radius: var(--border-radius-xl) var(--border-radius-xl) 0 0;
   z-index: 201;
-  transition: transform var(--transition-smooth);
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  will-change: transform;
 }
 
 .bottom-sheet.active {
   transform: translateX(-50%) translateY(0);
 }
 
+.bottom-sheet.dragging {
+  transition: none !important;
+}
+
+.sheet-handle-area {
+  padding: 14px 0 6px;
+  cursor: grab;
+  touch-action: none;
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
 .sheet-handle {
-  width: 40px;
-  height: 4px;
+  width: 44px;
+  height: 5px;
   background: var(--text-muted);
-  border-radius: 2px;
-  margin: 12px auto 0;
+  border-radius: 3px;
+  pointer-events: none;
 }
 
 .sheet-content {
-  padding: 20px 24px 40px;
+  padding: 12px 24px 40px;
+  padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px));
 }
 
 .sheet-title {
   font-size: 20px;
   font-weight: 800;
   margin-bottom: 20px;
+}
+
+/* iOS Safari form elements fix */
+.sheet-select,
+.sheet-date {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  display: block;
+  width: 100%;
+  padding: 16px 42px 16px 18px;
+  background-color: var(--bg-input);
+  color: var(--text-primary);
+  color-scheme: dark;
+  -webkit-color-scheme: dark;
+  border: 1.5px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 16px;
+  line-height: 1.4;
+  outline: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23a0a0b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  background-size: 12px;
+}
+
+.sheet-date {
+  background-image: none;
+  padding-right: 18px;
+}
+
+.sheet-select:focus,
+.sheet-date:focus {
+  border-color: var(--accent-mint);
+  box-shadow: 0 0 0 3px rgba(0, 245, 212, 0.1);
+}
+
+.sheet-select option {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
 /* Booking Sheet */
@@ -2800,15 +2858,17 @@ body {
   </nav>
 
   <!-- ═══════════════ BOOKING BOTTOM SHEET ═══════════════ -->
-  <div class="modal-overlay" id="modal-overlay" onclick="closeSheet()"></div>
+  <div class="modal-overlay" id="modal-overlay"></div>
   <div class="bottom-sheet" id="booking-sheet">
-    <div class="sheet-handle"></div>
+    <div class="sheet-handle-area" id="sheet-handle-area">
+      <div class="sheet-handle"></div>
+    </div>
     <div class="sheet-content">
       <h2 class="sheet-title">Быстрая запись</h2>
 
       <div class="input-group" style="margin-bottom: 16px;">
         <label>Тип тренировки</label>
-        <select style="width:100%;padding:16px 18px;background:var(--bg-input);border:1.5px solid var(--border-color);border-radius:var(--border-radius-sm);color:var(--text-primary);font-family:inherit;font-size:16px;outline:none;appearance:none;-webkit-appearance:none;">
+        <select class="sheet-select">
           <option>Групповая тренировка</option>
           <option>Персональная тренировка</option>
           <option>Йога</option>
@@ -2820,7 +2880,7 @@ body {
 
       <div class="input-group" style="margin-bottom: 16px;">
         <label>Тренер</label>
-        <select style="width:100%;padding:16px 18px;background:var(--bg-input);border:1.5px solid var(--border-color);border-radius:var(--border-radius-sm);color:var(--text-primary);font-family:inherit;font-size:16px;outline:none;appearance:none;-webkit-appearance:none;">
+        <select class="sheet-select">
           <option>Любой тренер</option>
           <option>Дмитрий К.</option>
           <option>Анна М.</option>
@@ -2831,12 +2891,12 @@ body {
 
       <div class="input-group" style="margin-bottom: 16px;">
         <label>Дата</label>
-        <input type="date" value="2026-02-17" style="color-scheme: dark;">
+        <input type="date" value="2026-02-17" class="sheet-date">
       </div>
 
       <div class="input-group" style="margin-bottom: 24px;">
         <label>Время</label>
-        <select style="width:100%;padding:16px 18px;background:var(--bg-input);border:1.5px solid var(--border-color);border-radius:var(--border-radius-sm);color:var(--text-primary);font-family:inherit;font-size:16px;outline:none;appearance:none;-webkit-appearance:none;">
+        <select class="sheet-select">
           <option>09:00</option>
           <option>10:00</option>
           <option>11:00</option>
@@ -3101,21 +3161,80 @@ function animateRingChart(percent) {
   animate();
 }
 
-/* ═══════════════ BOTTOM SHEET ═══════════════ */
+/* ═══════════════ BOTTOM SHEET WITH SWIPE ═══════════════ */
+const sheet = document.getElementById('booking-sheet');
+const overlay = document.getElementById('modal-overlay');
+const handleArea = document.getElementById('sheet-handle-area');
+let sheetStartY = 0;
+let sheetCurrentY = 0;
+let sheetIsDragging = false;
+
 function openBookingSheet() {
-  document.getElementById('modal-overlay').classList.add('active');
-  document.getElementById('booking-sheet').classList.add('active');
+  overlay.classList.add('active');
+  sheet.classList.add('active');
+  sheet.style.transform = '';
+  document.body.style.overflow = 'hidden';
 }
 
 function closeSheet() {
-  document.getElementById('modal-overlay').classList.remove('active');
-  document.getElementById('booking-sheet').classList.remove('active');
+  sheet.classList.remove('dragging');
+  sheet.style.transform = '';
+  overlay.classList.remove('active');
+  sheet.classList.remove('active');
+  document.body.style.overflow = '';
 }
 
 function confirmBooking() {
   closeSheet();
   showToast('Вы успешно записаны на тренировку!');
 }
+
+/* Swipe-to-close on the entire sheet */
+sheet.addEventListener('touchstart', function(e) {
+  if (sheet.scrollTop > 5) return;
+  sheetStartY = e.touches[0].clientY;
+  sheetIsDragging = false;
+}, { passive: true });
+
+sheet.addEventListener('touchmove', function(e) {
+  const deltaY = e.touches[0].clientY - sheetStartY;
+  if (deltaY < 0) {
+    if (sheetIsDragging) {
+      sheetIsDragging = false;
+      sheet.classList.remove('dragging');
+      sheet.style.transform = '';
+    }
+    return;
+  }
+  if (deltaY > 10) {
+    sheetIsDragging = true;
+    sheet.classList.add('dragging');
+    sheet.style.transform = 'translateX(-50%) translateY(' + deltaY + 'px)';
+    sheetCurrentY = deltaY;
+    if (e.cancelable) e.preventDefault();
+  }
+}, { passive: false });
+
+sheet.addEventListener('touchend', function(e) {
+  if (!sheetIsDragging) return;
+  sheet.classList.remove('dragging');
+  if (sheetCurrentY > 100) {
+    closeSheet();
+  } else {
+    sheet.style.transform = '';
+  }
+  sheetIsDragging = false;
+  sheetCurrentY = 0;
+}, { passive: true });
+
+/* Handle area provides a larger drag target */
+handleArea.addEventListener('touchstart', function(e) {
+  sheetStartY = e.touches[0].clientY;
+  sheetIsDragging = false;
+}, { passive: true });
+
+/* Close on overlay tap */
+overlay.addEventListener('click', closeSheet);
 
 /* ═══════════════ TOAST ═══════════════ */
 function showToast(message, icon) {
@@ -3162,6 +3281,8 @@ document.addEventListener('DOMContentLoaded', () => {
 /* ═══════════════ PREVENT DOUBLE TAP ZOOM ═══════════════ */
 let lastTouchEnd = 0;
 document.addEventListener('touchend', function(e) {
+  const tag = e.target.tagName.toLowerCase();
+  if (tag === 'select' || tag === 'input' || tag === 'button' || tag === 'a' || tag === 'option') return;
   const now = Date.now();
   if (now - lastTouchEnd <= 300) {
     e.preventDefault();
