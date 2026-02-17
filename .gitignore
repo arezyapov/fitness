@@ -1,0 +1,29 @@
+# Environment
+.env
+.env.local
+.env.production
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build
+dist/
+build/
+ios/
+android/
+
+# Capacitor (native builds)
+ios/
+android/
+
+# Logs
+*.log
